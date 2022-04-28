@@ -21,7 +21,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.0", 
+	version = "1.1", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -29,11 +29,13 @@ public void OnPluginStart()
 {
 	LoadTranslations("common.phrases");
 	RegConsoleCmd("sm_lr", Command_LR, "");
+	
 	RegAdminCmd("sm_lriptal", Command_Cancellr, ADMFLAG_SLAY, "");
 	RegAdminCmd("sm_lr0", Command_Cancellr, ADMFLAG_SLAY, "");
 	RegAdminCmd("sm_cancellr", Command_Cancellr, ADMFLAG_SLAY, "");
 	
 	RegAdminCmd("sm_hrespawn", Command_Respawn, ADMFLAG_SLAY, "[SM] Usage: sm_hrespawn <#userid|name>");
+	RegAdminCmd("sm_hrev", Command_Respawn, ADMFLAG_SLAY, "[SM] Usage: sm_hrev <#userid|name>");
 	RegAdminCmd("sm_1up", Command_Respawn, ADMFLAG_SLAY, "[SM] Usage: sm_1up <#userid|name>");
 	
 	g_CollisionGroup = FindSendPropInfo("CBaseEntity", "m_CollisionGroup");
@@ -69,7 +71,14 @@ public Action Command_Cancellr(int client, int args)
 
 public Action Command_LR(int client, int args)
 {
-	int Num = GetTeamAliveClientCount(2);
+	int Num = 0;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (!IsValidClient(i) || !IsPlayerAlive(i) || GetClientTeam(i) != 2)
+			continue;
+		
+		Num++;
+	}
 	if (Num != 1)
 	{
 		ReplyToCommand(client, "[SM] Birden fazla terörist varken LR atamazsın.");
@@ -184,7 +193,15 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 				}
 				SetEntityHealth(LRClient[1], 100);
 				SetEntPropFloat(LRClient[1], Prop_Data, "m_flLaggedMovementValue", 1.0);
-				ClearWeaponEx(LRClient[1]);
+				int wepIdx = 0;
+				for (int i; i < 12; i++)
+				{
+					while ((wepIdx = GetPlayerWeaponSlot(LRClient[1], i)) != -1)
+					{
+						RemovePlayerItem(LRClient[1], wepIdx);
+						RemoveEntity(wepIdx);
+					}
+				}
 				
 				SetEntProp(LRClient[0], Prop_Send, "m_bHasHelmet", 0);
 				SetEntProp(LRClient[0], Prop_Send, "m_ArmorValue", 0, 0);
@@ -195,7 +212,15 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 				}
 				SetEntityHealth(LRClient[0], 100);
 				SetEntPropFloat(LRClient[0], Prop_Data, "m_flLaggedMovementValue", 1.0);
-				ClearWeaponEx(LRClient[0]);
+				wepIdx = 0;
+				for (int i; i < 12; i++)
+				{
+					while ((wepIdx = GetPlayerWeaponSlot(LRClient[0], i)) != -1)
+					{
+						RemovePlayerItem(LRClient[0], wepIdx);
+						RemoveEntity(wepIdx);
+					}
+				}
 				
 				SetEntityModel(LRClient[0], "models/player/custom_player/legacy/tm_jungle_raider_variantc.mdl");
 				SetEntityModel(LRClient[1], "models/player/custom_player/legacy/ctm_st6_variantk.mdl");
@@ -431,7 +456,7 @@ public Action StripPlayer(int client, const char[] command, int argc)
 				client, 
 				target_list, 
 				MAXPLAYERS, 
-				COMMAND_FILTER_DEAD, 
+				COMMAND_FILTER_NO_IMMUNITY, 
 				target_name, 
 				sizeof(target_name), 
 				tn_is_ml)) <= 0)
@@ -441,7 +466,15 @@ public Action StripPlayer(int client, const char[] command, int argc)
 	
 	for (int i = 0; i < target_count; i++)
 	{
-		ClearWeaponEx(target_list[i]);
+		int wepIdx;
+		for (int a; i < 12; a++)
+		{
+			while ((wepIdx = GetPlayerWeaponSlot(target_list[i], a)) != -1)
+			{
+				RemovePlayerItem(target_list[i], wepIdx);
+				RemoveEntity(wepIdx);
+			}
+		}
 	}
 	
 	return Plugin_Continue;
@@ -498,7 +531,7 @@ void Perform1up(int target)
 	CS_RespawnPlayer(target);
 	if (dcoor[target][0] == 0.0 && dcoor[target][1] == 0.0 && dcoor[target][2] == 0.0)
 	{
-		LogError("%N: Respawn data Unavailable", target);
+		LogError("%N: Hrespawn data Unavailable", target);
 	}
 	else
 	{
@@ -590,7 +623,7 @@ public Action OnClientSpawn(Event event, const char[] name, bool dB)
 		{
 			GivePlayerItem(client, "weapon_knife");
 		}
-		UnblockEntity(client, g_CollisionGroup);
+		SetEntData(client, g_CollisionGroup, 2, 4, true);
 	}
 }
 
@@ -604,58 +637,15 @@ public Action OnClientDead(Event event, const char[] name, bool dB)
 		if (LR)
 		{
 			LR = false;
-			if (client == LRClient[0])
-				PrintToChatAll("[SM] Kapışma sona erdi, \x10%N\x01 kaybetti.", LRClient[0]);
-			else if (client == LRClient[1])
-				PrintToChatAll("[SM] Kapışma sona erdi, \x10%N\x01 kaybetti.", LRClient[1]);
+			if (client == LRClient[0] || client == LRClient[1])
+			{
+				PrintToChatAll("[SM] Kapışma sona erdi, \x10%N\x01 kaybetti.", client);
+			}
 		}
 	}
 }
 
 public Action RoundEnd(Event event, const char[] name, bool dB)
-{
-	GroundWeaponClear();
-	LR = false;
-}
-
-bool IsValidClient(int client, bool nobots = false)
-{
-	if (client <= 0 || client > MaxClients || !IsClientConnected(client) || (nobots && IsFakeClient(client)))
-	{
-		return false;
-	}
-	return IsClientInGame(client);
-}
-
-int GetTeamAliveClientCount(int team)
-{
-	int amount;
-	
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (!IsValidClient(i) || !IsPlayerAlive(i) || GetClientTeam(i) != team)
-			continue;
-		
-		amount++;
-	}
-	
-	return amount;
-}
-
-void ClearWeaponEx(int client)
-{
-	int wepIdx;
-	for (int i; i < 12; i++)
-	{
-		while ((wepIdx = GetPlayerWeaponSlot(client, i)) != -1)
-		{
-			RemovePlayerItem(client, wepIdx);
-			RemoveEntity(wepIdx);
-		}
-	}
-}
-
-void GroundWeaponClear()
 {
 	int g_WeaponParent = FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity");
 	int maxent = GetMaxEntities();
@@ -669,9 +659,14 @@ void GroundWeaponClear()
 				RemoveEntity(i);
 		}
 	}
+	LR = false;
 }
 
-void UnblockEntity(int client, int cachedOffset)
+bool IsValidClient(int client, bool nobots = true)
 {
-	SetEntData(client, cachedOffset, 2, 4, true);
+	if (client <= 0 || client > MaxClients || !IsClientConnected(client) || (nobots && IsFakeClient(client)))
+	{
+		return false;
+	}
+	return IsClientInGame(client);
 } 
