@@ -2,14 +2,9 @@
 #include <cstrike>
 #include <sdktools>
 
-#undef REQUIRE_PLUGIN
-#include <basecomm>
-
 #pragma semicolon 1
 #pragma newdecls required
 
-int g_CollisionGroup = -1;
-bool bBasecomm;
 float dcoor[65][3], dangle[65][3];
 bool LR = false, NsLR = false;
 int g_iBeam = -1;
@@ -21,6 +16,7 @@ GlobalForward g_LRForward, g_LRCancelForward, g_LREndForward;
 1.0 İlk paylaşım,
 1.1 Hata gidermeleri ve iyileştirmeler,
 1.2 LR Apisi ve iyileştirmeler.
+1.3 Hata gidermeleri ve iyileştirmeler
 */
 
 public Plugin myinfo = 
@@ -28,7 +24,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.2", 
+	version = "1.3", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -48,14 +44,10 @@ public void OnPluginStart()
 	RegAdminCmd("sm_hrev", Command_Respawn, ADMFLAG_SLAY, "[SM] Usage: sm_hrev <#userid|name>");
 	RegAdminCmd("sm_1up", Command_Respawn, ADMFLAG_SLAY, "[SM] Usage: sm_1up <#userid|name>");
 	
-	g_CollisionGroup = FindSendPropInfo("CBaseEntity", "m_CollisionGroup");
-	if (g_CollisionGroup == -1)
-	{
-		SetFailState("Unable to find offset for collision groups.");
-	}
 	HookEvent("player_spawn", OnClientSpawn);
 	HookEvent("player_death", OnClientDead);
 	
+	HookEvent("round_start", RoundStart);
 	HookEvent("round_end", RoundEnd);
 	
 	HookEvent("weapon_fire", WeaponFire);
@@ -196,15 +188,6 @@ Menu Gardiyansor()
 	return menu;
 }
 
-public Action OnPlayerRunCmd(int client, int &buttons)
-{
-	if (LR && NsLR && (LRClient[0] || LRClient[1]))
-	{
-		buttons &= ~IN_ATTACK2;
-	}
-	return Plugin_Continue;
-}
-
 public int Menu2_callback(Menu menu, MenuAction action, int client, int position)
 {
 	if (action == MenuAction_End)
@@ -333,8 +316,17 @@ public Action Beamver(Handle timer, any data)
 	
 	vPos[2] += 12.0;
 	
-	TE_SetupBeamPoints(aPos, vPos, g_iBeam, 0, 0, 0, 0.1, 1.0, 1.0, 1, 0.0, { 255, 255, 255, 150 }, 0);
-	TE_SendToAll();
+	TE_SetupBeamPoints(aPos, vPos, g_iBeam, 0, 0, 0, 0.1, 1.0, 1.0, 1, 0.0, { 255, 255, 255, 180 }, 0);
+	int total = 0;
+	int[] clients = new int[MaxClients];
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i))
+		{
+			clients[total++] = i;
+		}
+	}
+	TE_Send(clients, total, 0.0);
 	return Plugin_Continue;
 }
 
@@ -360,7 +352,7 @@ public Action StartNoScope(Handle timer, int time)
 	{
 		SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
 		SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 2, 1);
-		PrintCenterTextAll("(%N v %N)NoScope LR'si başladı", LRClient[0], LRClient[1]);
+		PrintHintTextToAll("(%N v %N)NoScope LR'si başladı", LRClient[0], LRClient[1]);
 		return Plugin_Stop;
 	}
 	else
@@ -374,7 +366,7 @@ public Action StartNoScope(Handle timer, int time)
 
 public Action WeaponFire(Event event, const char[] name, bool dB)
 {
-	if (LR && !NsLR)
+	if (LR)
 	{
 		int client = GetClientOfUserId(event.GetInt("userid"));
 		if (IsValidClient(client))
@@ -391,74 +383,63 @@ public Action WeaponFire(Event event, const char[] name, bool dB)
 			}
 			else
 			{
-				if (client == LRClient[0])
+				if (client == LRClient[0] || client == LRClient[1])
 				{
 					char weapon[16];
 					event.GetString("weapon", weapon, 16);
-					if (strncmp(weapon, "weapon_deagle", 13, false) == 0)
+					if (!NsLR)
 					{
-						if (!S4S[LRClient[0]])
+						if (strncmp(weapon, "weapon_deagle", 13, false) == 0)
 						{
-							PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", LRClient[0]);
+							if (!S4S[client])
+							{
+								PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
+								LR = false;
+								ForcePlayerSuicide(client);
+							}
+							else
+							{
+								if (client == LRClient[0])
+								{
+									S4S[client] = false;
+									CreateTimer(0.4, ResetAmmo, client, TIMER_FLAG_NO_MAPCHANGE);
+								}
+								else if (client == LRClient[1])
+								{
+									S4S[client] = false;
+									CreateTimer(0.4, ResetAmmo, client, TIMER_FLAG_NO_MAPCHANGE);
+								}
+							}
+						}
+						else if (strncmp(weapon, "weapon_knife", 12, false) != 0)
+						{
+							PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
 							LR = false;
-							ForcePlayerSuicide(LRClient[0]);
-						}
-						else
-						{
-							S4S[LRClient[0]] = false;
-							S4S[LRClient[1]] = true;
-							int deagleindex = GetPlayerWeaponSlot(LRClient[1], CS_SLOT_SECONDARY);
-							SetEntProp(deagleindex, Prop_Data, "m_iClip1", 1);
-							SetEntProp(deagleindex, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
-							SetEntProp(deagleindex, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
-							PrintToChatAll("[SM] Atış sırası: \x10%N", LRClient[1]);
-							
-							CreateTimer(0.4, ResetAmmo, LRClient[0], TIMER_FLAG_NO_MAPCHANGE);
+							ForcePlayerSuicide(client);
 						}
 					}
-					else if (strncmp(weapon, "weapon_knife", 12, false) != 0)
+					else
 					{
-						PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", LRClient[0]);
-						LR = false;
-						ForcePlayerSuicide(LRClient[0]);
-					}
-				}
-				else if (client == LRClient[1])
-				{
-					char weapon[16];
-					event.GetString("weapon", weapon, 16);
-					if (strncmp(weapon, "weapon_deagle", 13, false) == 0)
-					{
-						if (!S4S[LRClient[1]])
+						if (strncmp(weapon, "weapon_awp", 10, false) != 0)
 						{
-							PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", LRClient[1]);
+							PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
 							LR = false;
-							ForcePlayerSuicide(LRClient[1]);
+							ForcePlayerSuicide(client);
 						}
-						else
-						{
-							S4S[LRClient[1]] = false;
-							S4S[LRClient[0]] = true;
-							int deagleindex = GetPlayerWeaponSlot(LRClient[0], CS_SLOT_SECONDARY);
-							SetEntProp(deagleindex, Prop_Data, "m_iClip1", 1);
-							SetEntProp(deagleindex, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
-							SetEntProp(deagleindex, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
-							PrintToChatAll("[SM] Atış sırası: \x10%N", LRClient[0]);
-							
-							CreateTimer(0.4, ResetAmmo, LRClient[1], TIMER_FLAG_NO_MAPCHANGE);
-						}
-					}
-					else if (strncmp(weapon, "weapon_knife", 12, false) != 0)
-					{
-						PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", LRClient[1]);
-						LR = false;
-						ForcePlayerSuicide(LRClient[1]);
 					}
 				}
 			}
 		}
 	}
 	return Plugin_Continue;
+}
+
+public Action OnPlayerRunCmd(int client, int &buttons)
+{
+	if (LR && NsLR && IsValidClient(client) && (client == LRClient[0] || client == LRClient[1]))
+	{
+		buttons &= ~IN_ATTACK2;
+	}
 }
 
 public Action ResetAmmo(Handle timer, int client)
@@ -471,6 +452,30 @@ public Action ResetAmmo(Handle timer, int client)
 			SetEntProp(deagleindex, Prop_Data, "m_iClip1", 0);
 			SetEntProp(deagleindex, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
 			SetEntProp(deagleindex, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
+		}
+		if (client == LRClient[0])
+		{
+			S4S[LRClient[1]] = true;
+			deagleindex = GetPlayerWeaponSlot(LRClient[1], CS_SLOT_SECONDARY);
+			if (IsValidEntity(deagleindex))
+			{
+				SetEntProp(deagleindex, Prop_Data, "m_iClip1", 1);
+				SetEntProp(deagleindex, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
+				SetEntProp(deagleindex, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
+			}
+			PrintToChatAll("[SM] Atış sırası: \x10%N", LRClient[1]);
+		}
+		else if (client == LRClient[1])
+		{
+			S4S[LRClient[0]] = true;
+			deagleindex = GetPlayerWeaponSlot(LRClient[0], CS_SLOT_SECONDARY);
+			if (IsValidEntity(deagleindex))
+			{
+				SetEntProp(deagleindex, Prop_Data, "m_iClip1", 1);
+				SetEntProp(deagleindex, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
+				SetEntProp(deagleindex, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
+			}
+			PrintToChatAll("[SM] Atış sırası: \x10%N", LRClient[0]);
 		}
 	}
 }
@@ -550,23 +555,6 @@ public Action OnJoinTeam(int client, const char[] command, int argc)
 	return Plugin_Continue;
 }
 
-public void OnAllPluginsLoaded()
-{
-	bBasecomm = LibraryExists("basecomm");
-}
-
-public void OnLibraryRemoved(const char[] name)
-{
-	if (StrEqual(name, "basecomm"))
-		bBasecomm = false;
-}
-
-public void OnLibraryAdded(const char[] name)
-{
-	if (StrEqual(name, "basecomm"))
-		bBasecomm = true;
-}
-
 public void OnMapStart()
 {
 	char map[32];
@@ -588,10 +576,27 @@ public void OnMapStart()
 
 public void OnClientPostAdminCheck(int client)
 {
-	FakeClientCommand(client, "jointeam 2");
+	CreateTimer(0.5, TaT, client, TIMER_FLAG_NO_MAPCHANGE);
 	SetClientListeningFlags(client, VOICE_MUTED);
-	if (bBasecomm)
-		BaseComm_SetClientMute(client, true);
+}
+
+public Action TaT(Handle timer, int client)
+{
+	if (!IsValidClient(client))
+	{
+		return Plugin_Stop;
+	}
+	else if (!IsClientConnected(client))
+	{
+		CreateTimer(1.0, TaT, client, TIMER_FLAG_NO_MAPCHANGE);
+		return Plugin_Stop;
+	}
+	else
+	{
+		ChangeClientTeam(client, 2);
+		SetClientListeningFlags(client, VOICE_MUTED);
+		return Plugin_Stop;
+	}
 }
 
 public Action OnClientSpawn(Event event, const char[] name, bool dB)
@@ -608,17 +613,13 @@ public Action OnClientSpawn(Event event, const char[] name, bool dB)
 				RemoveEntity(wepIdx);
 			}
 		}
+		GivePlayerItem(client, "weapon_knife");
 		if (GetClientTeam(client) == 3)
 		{
 			GivePlayerItem(client, "weapon_m4a1");
 			GivePlayerItem(client, "weapon_deagle");
-			GivePlayerItem(client, "weapon_knife");
 		}
-		else if (GetClientTeam(client) == 2)
-		{
-			GivePlayerItem(client, "weapon_knife");
-		}
-		SetEntData(client, g_CollisionGroup, 2, 4, true);
+		SetEntProp(client, Prop_Data, "m_CollisionGroup", 2);
 	}
 }
 
@@ -643,17 +644,31 @@ public Action OnClientDead(Event event, const char[] name, bool dB)
 	}
 }
 
+public Action RoundStart(Event event, const char[] name, bool dB)
+{
+	int g_WeaponParent = FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity");
+	char weapon[16];
+	for (int i = MaxClients; i < GetMaxEntities(); i++)
+	{
+		if (IsValidEntity(i))
+		{
+			GetEntityClassname(i, weapon, 16);
+			if (strncmp(weapon, "weapon_knife", 12, false) == 0 && GetEntDataEnt2(i, g_WeaponParent) == -1)
+				RemoveEntity(i);
+		}
+	}
+}
+
 public Action RoundEnd(Event event, const char[] name, bool dB)
 {
 	int g_WeaponParent = FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity");
-	int maxent = GetMaxEntities();
-	char weapon[64];
-	for (int i = MaxClients; i < maxent; i++)
+	char weapon[16];
+	for (int i = MaxClients; i < GetMaxEntities(); i++)
 	{
-		if (IsValidEdict(i) && IsValidEntity(i))
+		if (IsValidEntity(i))
 		{
-			GetEdictClassname(i, weapon, sizeof(weapon));
-			if ((StrContains(weapon, "weapon_") != -1 || StrContains(weapon, "item_") != -1) && GetEntDataEnt2(i, g_WeaponParent) == -1)
+			GetEntityClassname(i, weapon, 16);
+			if ((strncmp(weapon, "weapon_", 7, false) == 0 || strncmp(weapon, "item_", 5) == 0) && GetEntDataEnt2(i, g_WeaponParent) == -1)
 				RemoveEntity(i);
 		}
 	}
