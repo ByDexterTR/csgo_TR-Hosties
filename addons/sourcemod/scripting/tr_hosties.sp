@@ -15,18 +15,28 @@ bool LR = false, NsLR = false;
 int g_iBeam = -1;
 int LRClient[2] = { 0, ... }; // 0 T | 1 CT
 bool S4S[65] = { false, ... };
+GlobalForward g_LRForward, g_LRCancelForward, g_LREndForward;
+
+/* Güncellemeler
+1.0 İlk paylaşım,
+1.1 Hata gidermeleri ve iyileştirmeler,
+1.2 LR Apisi ve iyileştirmeler.
+*/
 
 public Plugin myinfo = 
 {
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.1", 
+	version = "1.2", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
 public void OnPluginStart()
 {
+	g_LRForward = new GlobalForward("LRStart", ET_Ignore, Param_Cell, Param_Cell);
+	g_LRCancelForward = new GlobalForward("LRCancel", ET_Ignore, Param_Cell, Param_Cell);
+	g_LREndForward = new GlobalForward("LREnd", ET_Ignore, Param_Cell);
 	LoadTranslations("common.phrases");
 	RegConsoleCmd("sm_lr", Command_LR, "");
 	
@@ -51,9 +61,37 @@ public void OnPluginStart()
 	HookEvent("weapon_fire", WeaponFire);
 	
 	AddCommandListener(OnJoinTeam, "jointeam");
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	CreateNative("LRExist", Native_LRExist);
+	CreateNative("LRTypeNoScope", Native_LRTypeNoScope);
 	
-	AddCommandListener(StripPlayer, "sm_ban");
-	AddCommandListener(StripPlayer, "sm_kick");
+	RegPluginLibrary("tr_hosties");
+	
+	return APLRes_Success;
+}
+
+public int Native_LRExist(Handle plugin, int numParams)
+{
+	if (LR)
+		return true;
+	else
+		return false;
+}
+
+public int Native_LRTypeNoScope(Handle plugin, int numParams)
+{
+	if (!LR)
+		return false;
+	else
+	{
+		if (!NsLR)
+			return false;
+		else
+			return true;
+	}
 }
 
 public Action Command_Cancellr(int client, int args)
@@ -66,6 +104,10 @@ public Action Command_Cancellr(int client, int args)
 	
 	LR = false;
 	PrintToChatAll("[SM] \x10%N\x01 LR'yi iptal etti.", client);
+	Call_StartForward(g_LRCancelForward);
+	Call_PushCell(LRClient[0]);
+	Call_PushCell(LRClient[1]);
+	Call_Finish();
 	return Plugin_Handled;
 }
 
@@ -259,6 +301,10 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 					SetEntProp(iDeagle, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
 				}
 				CreateTimer(0.1, Beamver, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+				Call_StartForward(g_LRForward);
+				Call_PushCell(LRClient[0]);
+				Call_PushCell(LRClient[1]);
+				Call_Finish();
 			}
 			else
 			{
@@ -429,57 +475,6 @@ public Action ResetAmmo(Handle timer, int client)
 	}
 }
 
-public Action StripPlayer(int client, const char[] command, int argc)
-{
-	if (argc < 1)
-	{
-		return Plugin_Handled;
-	}
-	if (strncmp(command, "sm_kick", 7, false) == 0 && !CheckCommandAccess(client, "sm_kick", ADMFLAG_ROOT))
-	{
-		return Plugin_Handled;
-	}
-	else if (strncmp(command, "sm_ban", 6, false) == 0 && !CheckCommandAccess(client, "sm_ban", ADMFLAG_ROOT))
-	{
-		return Plugin_Handled;
-	}
-	
-	char arg[65];
-	GetCmdArg(1, arg, sizeof(arg));
-	
-	char target_name[MAX_TARGET_LENGTH];
-	int target_list[MAXPLAYERS], target_count;
-	bool tn_is_ml;
-	
-	if ((target_count = ProcessTargetString(
-				arg, 
-				client, 
-				target_list, 
-				MAXPLAYERS, 
-				COMMAND_FILTER_NO_IMMUNITY, 
-				target_name, 
-				sizeof(target_name), 
-				tn_is_ml)) <= 0)
-	{
-		return Plugin_Handled;
-	}
-	
-	for (int i = 0; i < target_count; i++)
-	{
-		int wepIdx;
-		for (int a; i < 12; a++)
-		{
-			while ((wepIdx = GetPlayerWeaponSlot(target_list[i], a)) != -1)
-			{
-				RemovePlayerItem(target_list[i], wepIdx);
-				RemoveEntity(wepIdx);
-			}
-		}
-	}
-	
-	return Plugin_Continue;
-}
-
 public Action Command_Respawn(int client, int args)
 {
 	if (args < 1)
@@ -636,10 +631,13 @@ public Action OnClientDead(Event event, const char[] name, bool dB)
 		GetClientAbsAngles(client, dangle[client]);
 		if (LR)
 		{
-			LR = false;
 			if (client == LRClient[0] || client == LRClient[1])
 			{
+				Call_StartForward(g_LREndForward);
+				Call_PushCell(client);
+				Call_Finish();
 				PrintToChatAll("[SM] Kapışma sona erdi, \x10%N\x01 kaybetti.", client);
+				LR = false;
 			}
 		}
 	}
