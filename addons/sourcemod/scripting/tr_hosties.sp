@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <cstrike>
 #include <sdktools>
+#include <basecomm>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -11,12 +12,14 @@ int g_iBeam = -1;
 int LRClient[2] = { 0, ... }; // 0 T | 1 CT
 bool S4S[65] = { false, ... };
 GlobalForward g_LRForward, g_LRCancelForward, g_LREndForward;
+bool bBasecomm;
 
 /* Güncellemeler
 1.0 İlk paylaşım,
 1.1 Hata gidermeleri ve iyileştirmeler,
-1.2 LR Apisi ve iyileştirmeler.
-1.3 Hata gidermeleri ve iyileştirmeler
+1.2 LR Apisi ve iyileştirmeler,
+1.3 Hata gidermeleri ve iyileştirmeler,
+1.3bFix Basecomm unmute hatasını giderme.
 */
 
 public Plugin myinfo = 
@@ -24,7 +27,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.3", 
+	version = "1.3bFix", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -33,6 +36,7 @@ public void OnPluginStart()
 	g_LRForward = new GlobalForward("LRStart", ET_Ignore, Param_Cell, Param_Cell);
 	g_LRCancelForward = new GlobalForward("LRCancel", ET_Ignore, Param_Cell, Param_Cell);
 	g_LREndForward = new GlobalForward("LREnd", ET_Ignore, Param_Cell);
+	
 	LoadTranslations("common.phrases");
 	RegConsoleCmd("sm_lr", Command_LR, "");
 	
@@ -54,6 +58,24 @@ public void OnPluginStart()
 	
 	AddCommandListener(OnJoinTeam, "jointeam");
 }
+
+public void OnAllPluginsLoaded()
+{
+	bBasecomm = LibraryExists("basecomm");
+}
+
+public void OnLibraryAdded(const char[] name)
+{
+	if (strncmp(name, "basecomm", 8, false) == 0)
+		bBasecomm = true;
+}
+
+public void OnLibraryRemoved(const char[] name)
+{
+	if (strncmp(name, "basecomm", 8, false) == 0)
+		bBasecomm = false;
+}
+
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
@@ -352,7 +374,7 @@ public Action StartNoScope(Handle timer, int time)
 	{
 		SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
 		SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 2, 1);
-		PrintHintTextToAll("(%N v %N)NoScope LR'si başladı", LRClient[0], LRClient[1]);
+		PrintCenterTextAll("(%N v %N)NoScope LR'si başladı", LRClient[0], LRClient[1]);
 		return Plugin_Stop;
 	}
 	else
@@ -578,11 +600,13 @@ public void OnClientPostAdminCheck(int client)
 {
 	CreateTimer(0.5, TaT, client, TIMER_FLAG_NO_MAPCHANGE);
 	SetClientListeningFlags(client, VOICE_MUTED);
+	if (bBasecomm)
+		BaseComm_SetClientMute(client, true);
 }
 
 public Action TaT(Handle timer, int client)
 {
-	if (!IsValidClient(client))
+	if (client <= 0 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client))
 	{
 		return Plugin_Stop;
 	}
@@ -595,6 +619,8 @@ public Action TaT(Handle timer, int client)
 	{
 		ChangeClientTeam(client, 2);
 		SetClientListeningFlags(client, VOICE_MUTED);
+		if (bBasecomm)
+			BaseComm_SetClientMute(client, true);
 		return Plugin_Stop;
 	}
 }
