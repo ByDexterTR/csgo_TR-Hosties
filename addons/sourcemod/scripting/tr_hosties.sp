@@ -15,11 +15,12 @@ GlobalForward g_LRForward, g_LRCancelForward, g_LREndForward;
 bool bBasecomm;
 
 /* Güncellemeler
-1.0 İlk paylaşım,
-1.1 Hata gidermeleri ve iyileştirmeler,
-1.2 LR Apisi ve iyileştirmeler,
-1.3 Hata gidermeleri ve iyileştirmeler,
-1.3bFix Basecomm unmute hatasını giderme.
+1.0			İlk paylaşım,
+1.1			Hata gidermeleri ve iyileştirmeler,
+1.2			LR Apisi ve iyileştirmeler,
+1.3			Hata gidermeleri ve iyileştirmeler,
+1.3bFix		Basecomm unmute hatasını giderme,
+1.4 		Birkaç oyun hatası düzeltme ve iyileştirme.
 */
 
 public Plugin myinfo = 
@@ -27,7 +28,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.3bFix", 
+	version = "1.4", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -38,15 +39,15 @@ public void OnPluginStart()
 	g_LREndForward = new GlobalForward("LREnd", ET_Ignore, Param_Cell);
 	
 	LoadTranslations("common.phrases");
-	RegConsoleCmd("sm_lr", Command_LR, "");
+	RegConsoleCmd("sm_lr", Command_LR, "[SM] Kullanım: sm_lr");
 	
-	RegAdminCmd("sm_lriptal", Command_Cancellr, ADMFLAG_SLAY, "");
-	RegAdminCmd("sm_lr0", Command_Cancellr, ADMFLAG_SLAY, "");
-	RegAdminCmd("sm_cancellr", Command_Cancellr, ADMFLAG_SLAY, "");
+	RegAdminCmd("sm_lriptal", Command_Cancellr, ADMFLAG_SLAY, "[SM] Kullanım: sm_lriptal");
+	RegAdminCmd("sm_lr0", Command_Cancellr, ADMFLAG_SLAY, "[SM] Kullanım: sm_lr0");
+	RegAdminCmd("sm_cancellr", Command_Cancellr, ADMFLAG_SLAY, "[SM] Kullanım: sm_cancellr");
 	
-	RegAdminCmd("sm_hrespawn", Command_Respawn, ADMFLAG_SLAY, "[SM] Usage: sm_hrespawn <#userid|name>");
-	RegAdminCmd("sm_hrev", Command_Respawn, ADMFLAG_SLAY, "[SM] Usage: sm_hrev <#userid|name>");
-	RegAdminCmd("sm_1up", Command_Respawn, ADMFLAG_SLAY, "[SM] Usage: sm_1up <#userid|name>");
+	RegAdminCmd("sm_hrespawn", Command_Respawn, ADMFLAG_SLAY, "[SM] Kullanım: sm_hrespawn <#userid|name>");
+	RegAdminCmd("sm_hrev", Command_Respawn, ADMFLAG_SLAY, "[SM] Kullanım: sm_hrev <#userid|name>");
+	RegAdminCmd("sm_1up", Command_Respawn, ADMFLAG_SLAY, "[SM] Kullanım: sm_1up <#userid|name>");
 	
 	HookEvent("player_spawn", OnClientSpawn);
 	HookEvent("player_death", OnClientDead);
@@ -233,11 +234,8 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 			{
 				SetEntProp(LRClient[1], Prop_Send, "m_bHasHelmet", 0);
 				SetEntProp(LRClient[1], Prop_Send, "m_ArmorValue", 0, 0);
-				if (GetEngineVersion() == Engine_CSGO)
-				{
-					SetEntProp(LRClient[1], Prop_Send, "m_bHasHeavyArmor", 0);
-					SetEntProp(LRClient[1], Prop_Send, "m_bWearingSuit", 0);
-				}
+				SetEntProp(LRClient[1], Prop_Send, "m_bHasHeavyArmor", 0);
+				SetEntProp(LRClient[1], Prop_Send, "m_bWearingSuit", 0);
 				SetEntityHealth(LRClient[1], 100);
 				SetEntPropFloat(LRClient[1], Prop_Data, "m_flLaggedMovementValue", 1.0);
 				int wepIdx = 0;
@@ -252,11 +250,8 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 				
 				SetEntProp(LRClient[0], Prop_Send, "m_bHasHelmet", 0);
 				SetEntProp(LRClient[0], Prop_Send, "m_ArmorValue", 0, 0);
-				if (GetEngineVersion() == Engine_CSGO)
-				{
-					SetEntProp(LRClient[0], Prop_Send, "m_bHasHeavyArmor", 0);
-					SetEntProp(LRClient[0], Prop_Send, "m_bWearingSuit", 0);
-				}
+				SetEntProp(LRClient[0], Prop_Send, "m_bHasHeavyArmor", 0);
+				SetEntProp(LRClient[0], Prop_Send, "m_bWearingSuit", 0);
 				SetEntityHealth(LRClient[0], 100);
 				SetEntPropFloat(LRClient[0], Prop_Data, "m_flLaggedMovementValue", 1.0);
 				wepIdx = 0;
@@ -594,6 +589,7 @@ public void OnMapStart()
 	g_iBeam = PrecacheModel("materials/sprites/white.vmt", true);
 	PrecacheModel("models/player/custom_player/legacy/tm_jungle_raider_variantc.mdl");
 	PrecacheModel("models/player/custom_player/legacy/ctm_st6_variantk.mdl");
+	SetConVarInt(FindConVar("mp_equipment_reset_rounds"), 1, true, false);
 }
 
 public void OnClientPostAdminCheck(int client)
@@ -646,6 +642,8 @@ public Action OnClientSpawn(Event event, const char[] name, bool dB)
 			GivePlayerItem(client, "weapon_deagle");
 		}
 		SetEntProp(client, Prop_Data, "m_CollisionGroup", 2);
+		SetEntityRenderColor(client, 255, 255, 255, 255);
+		SetEntityRenderMode(client, RENDER_NORMAL);
 	}
 }
 
