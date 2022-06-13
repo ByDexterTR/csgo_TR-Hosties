@@ -20,7 +20,8 @@ bool bBasecomm;
 1.2			LR Apisi ve iyileştirmeler,
 1.3			Hata gidermeleri ve iyileştirmeler,
 1.3bFix		Basecomm unmute hatasını giderme,
-1.4 		Birkaç oyun hatası düzeltme ve iyileştirme.
+1.4 		Birkaç oyun hatası düzeltme ve iyileştirme,
+1.4bFix		Ölülerin LR seçme hatasını giderme.
 */
 
 public Plugin myinfo = 
@@ -28,7 +29,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.4", 
+	version = "1.4bFix", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -128,6 +129,11 @@ public Action Command_Cancellr(int client, int args)
 
 public Action Command_LR(int client, int args)
 {
+	if (!IsPlayerAlive(client))
+	{
+		ReplyToCommand(client, "[SM] Bu komutu ölüler kullanamaz.");
+		return Plugin_Handled;
+	}
 	int Num = 0;
 	for (int i = 1; i <= MaxClients; i++)
 	{
