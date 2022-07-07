@@ -21,7 +21,8 @@ bool bBasecomm;
 1.3			Hata gidermeleri ve iyileştirmeler,
 1.3bFix		Basecomm unmute hatasını giderme,
 1.4 		Birkaç oyun hatası düzeltme ve iyileştirme,
-1.4bFix		Ölülerin LR seçme hatasını giderme.
+1.4bFix		Ölülerin LR seçme hatasını giderme,
+1.5			LR düzeltmesi.
 */
 
 public Plugin myinfo = 
@@ -29,7 +30,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.4bFix", 
+	version = "1.5", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -236,8 +237,11 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 		{
 			LRClient[0] = client;
 			LRClient[1] = GetClientOfUserId(pos);
-			if (IsValidClient(LRClient[1]) && IsPlayerAlive(LRClient[1]))
+			if (IsValidClient(LRClient[1]))
 			{
+				if (!IsPlayerAlive(LRClient[1]))
+					CS_RespawnPlayer(LRClient[1]);
+				
 				SetEntProp(LRClient[1], Prop_Send, "m_bHasHelmet", 0);
 				SetEntProp(LRClient[1], Prop_Send, "m_ArmorValue", 0, 0);
 				SetEntProp(LRClient[1], Prop_Send, "m_bHasHeavyArmor", 0);
@@ -271,7 +275,9 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 				}
 				
 				SetEntityModel(LRClient[0], "models/player/custom_player/legacy/tm_jungle_raider_variantc.mdl");
+				SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
 				SetEntityModel(LRClient[1], "models/player/custom_player/legacy/ctm_st6_variantk.mdl");
+				SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 2, 1);
 				
 				LR = true;
 				if (NsLR)
@@ -331,15 +337,15 @@ public Action Beamver(Handle timer, any data)
 	if (IsValidClient(LRClient[0]))
 		GetClientAbsOrigin(LRClient[0], aPos);
 	
-	aPos[2] += 12.0;
+	aPos[2] += 20.0;
 	
 	float vPos[3];
 	if (IsValidClient(LRClient[1]))
 		GetClientAbsOrigin(LRClient[1], vPos);
 	
-	vPos[2] += 12.0;
+	vPos[2] += 20.0;
 	
-	TE_SetupBeamPoints(aPos, vPos, g_iBeam, 0, 0, 0, 0.1, 1.0, 1.0, 1, 0.0, { 255, 255, 255, 180 }, 0);
+	TE_SetupBeamPoints(aPos, vPos, g_iBeam, 0, 0, 0, 0.1, 1.0, 1.0, 1, 0.0, { 255, 255, 255, 120 }, 0);
 	int total = 0;
 	int[] clients = new int[MaxClients];
 	for (int i = 1; i <= MaxClients; i++)
@@ -534,7 +540,15 @@ public Action Command_Respawn(int client, int args)
 	
 	for (int i = 0; i < target_count; i++)
 	{
-		Perform1up(target_list[i]);
+		CS_RespawnPlayer(target_list[i]);
+		if (dcoor[target_list[i]][0] == 0.0 && dcoor[target_list[i]][1] == 0.0 && dcoor[target_list[i]][2] == 0.0)
+		{
+			LogError("%N: Hrespawn data Unavailable", target_list[i]);
+		}
+		else
+		{
+			TeleportEntity(target_list[i], dcoor[target_list[i]], dangle[target_list[i]], NULL_VECTOR);
+		}
 	}
 	
 	if (tn_is_ml)
@@ -547,19 +561,6 @@ public Action Command_Respawn(int client, int args)
 	}
 	
 	return Plugin_Handled;
-}
-
-void Perform1up(int target)
-{
-	CS_RespawnPlayer(target);
-	if (dcoor[target][0] == 0.0 && dcoor[target][1] == 0.0 && dcoor[target][2] == 0.0)
-	{
-		LogError("%N: Hrespawn data Unavailable", target);
-	}
-	else
-	{
-		TeleportEntity(target, dcoor[target], dangle[target], NULL_VECTOR);
-	}
 }
 
 public Action OnJoinTeam(int client, const char[] command, int argc)
