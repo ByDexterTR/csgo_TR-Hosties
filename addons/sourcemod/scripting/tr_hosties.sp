@@ -22,7 +22,8 @@ bool bBasecomm;
 1.3bFix		Basecomm unmute hatasını giderme,
 1.4 		Birkaç oyun hatası düzeltme ve iyileştirme,
 1.4bFix		Ölülerin LR seçme hatasını giderme,
-1.5			LR düzeltmesi.
+1.5			LR düzeltmesi,
+1.6			Hata Giderme.
 */
 
 public Plugin myinfo = 
@@ -30,7 +31,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.5", 
+	version = "1.6", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -43,9 +44,9 @@ public void OnPluginStart()
 	LoadTranslations("common.phrases");
 	RegConsoleCmd("sm_lr", Command_LR, "[SM] Kullanım: sm_lr");
 	
-	RegAdminCmd("sm_lriptal", Command_Cancellr, ADMFLAG_SLAY, "[SM] Kullanım: sm_lriptal");
-	RegAdminCmd("sm_lr0", Command_Cancellr, ADMFLAG_SLAY, "[SM] Kullanım: sm_lr0");
-	RegAdminCmd("sm_cancellr", Command_Cancellr, ADMFLAG_SLAY, "[SM] Kullanım: sm_cancellr");
+	RegAdminCmd("sm_lriptal", Command_Cancellr, ADMFLAG_SLAY | ADMFLAG_CHAT, "[SM] Kullanım: sm_lriptal");
+	RegAdminCmd("sm_lr0", Command_Cancellr, ADMFLAG_SLAY | ADMFLAG_CHAT, "[SM] Kullanım: sm_lr0");
+	RegAdminCmd("sm_cancellr", Command_Cancellr, ADMFLAG_SLAY | ADMFLAG_CHAT, "[SM] Kullanım: sm_cancellr");
 	
 	RegAdminCmd("sm_hrespawn", Command_Respawn, ADMFLAG_SLAY, "[SM] Kullanım: sm_hrespawn <#userid|name>");
 	RegAdminCmd("sm_hrev", Command_Respawn, ADMFLAG_SLAY, "[SM] Kullanım: sm_hrev <#userid|name>");
@@ -78,7 +79,6 @@ public void OnLibraryRemoved(const char[] name)
 	if (strncmp(name, "basecomm", 8, false) == 0)
 		bBasecomm = false;
 }
-
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
@@ -226,8 +226,8 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 	}
 	else if (action == MenuAction_Select)
 	{
-		char item[4];
-		menu.GetItem(position, item, 4);
+		char item[16];
+		menu.GetItem(position, item, 16);
 		int pos = StringToInt(item);
 		if (pos == 0)
 		{
@@ -311,6 +311,8 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 					SetEntProp(iDeagle, Prop_Data, "m_iClip1", 0);
 					SetEntProp(iDeagle, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
 					SetEntProp(iDeagle, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
+					SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 2, 1);
+					SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
 				}
 				CreateTimer(0.1, Beamver, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 				Call_StartForward(g_LRForward);
@@ -475,7 +477,7 @@ public Action ResetAmmo(Handle timer, int client)
 {
 	if (IsValidClient(client))
 	{
-		int deagleindex = GetPlayerWeaponSlot(client, CS_SLOT_SECONDARY);
+		int deagleindex = GetPlayerWeaponSlot(client, 1);
 		if (IsValidEntity(deagleindex))
 		{
 			SetEntProp(deagleindex, Prop_Data, "m_iClip1", 0);
@@ -485,7 +487,7 @@ public Action ResetAmmo(Handle timer, int client)
 		if (client == LRClient[0])
 		{
 			S4S[LRClient[1]] = true;
-			deagleindex = GetPlayerWeaponSlot(LRClient[1], CS_SLOT_SECONDARY);
+			deagleindex = GetPlayerWeaponSlot(LRClient[1], 1);
 			if (IsValidEntity(deagleindex))
 			{
 				SetEntProp(deagleindex, Prop_Data, "m_iClip1", 1);
@@ -497,7 +499,7 @@ public Action ResetAmmo(Handle timer, int client)
 		else if (client == LRClient[1])
 		{
 			S4S[LRClient[0]] = true;
-			deagleindex = GetPlayerWeaponSlot(LRClient[0], CS_SLOT_SECONDARY);
+			deagleindex = GetPlayerWeaponSlot(LRClient[0], 1);
 			if (IsValidEntity(deagleindex))
 			{
 				SetEntProp(deagleindex, Prop_Data, "m_iClip1", 1);
@@ -520,16 +522,16 @@ public Action Command_Respawn(int client, int args)
 	char arg[65];
 	GetCmdArg(1, arg, sizeof(arg));
 	
-	char target_name[MAX_TARGET_LENGTH];
-	int target_list[MAXPLAYERS], target_count;
+	char target_name[64];
+	int target_list[65], target_count;
 	bool tn_is_ml;
 	
 	if ((target_count = ProcessTargetString(
 				arg, 
 				client, 
 				target_list, 
-				MAXPLAYERS, 
-				COMMAND_FILTER_DEAD, 
+				65, 
+				COMMAND_FILTER_DEAD | COMMAND_FILTER_NO_BOTS, 
 				target_name, 
 				sizeof(target_name), 
 				tn_is_ml)) <= 0)
@@ -634,7 +636,7 @@ public Action OnClientSpawn(Event event, const char[] name, bool dB)
 	if (IsValidClient(client) && IsPlayerAlive(client))
 	{
 		int wepIdx;
-		for (int i; i < 12; i++)
+		for (int i; i < 13; i++)
 		{
 			while ((wepIdx = GetPlayerWeaponSlot(client, i)) != -1)
 			{
@@ -678,12 +680,12 @@ public Action OnClientDead(Event event, const char[] name, bool dB)
 public Action RoundStart(Event event, const char[] name, bool dB)
 {
 	int g_WeaponParent = FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity");
-	char weapon[16];
+	char weapon[14];
 	for (int i = MaxClients; i < GetMaxEntities(); i++)
 	{
 		if (IsValidEntity(i))
 		{
-			GetEntityClassname(i, weapon, 16);
+			GetEntityClassname(i, weapon, 14);
 			if (strncmp(weapon, "weapon_knife", 12, false) == 0 && GetEntDataEnt2(i, g_WeaponParent) == -1)
 				RemoveEntity(i);
 		}
@@ -693,12 +695,12 @@ public Action RoundStart(Event event, const char[] name, bool dB)
 public Action RoundEnd(Event event, const char[] name, bool dB)
 {
 	int g_WeaponParent = FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity");
-	char weapon[16];
+	char weapon[9];
 	for (int i = MaxClients; i < GetMaxEntities(); i++)
 	{
 		if (IsValidEntity(i))
 		{
-			GetEntityClassname(i, weapon, 16);
+			GetEntityClassname(i, weapon, 9);
 			if ((strncmp(weapon, "weapon_", 7, false) == 0 || strncmp(weapon, "item_", 5) == 0) && GetEntDataEnt2(i, g_WeaponParent) == -1)
 				RemoveEntity(i);
 		}
