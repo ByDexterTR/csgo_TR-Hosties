@@ -23,7 +23,8 @@ bool bBasecomm;
 1.4 		Birkaç oyun hatası düzeltme ve iyileştirme,
 1.4bFix		Ölülerin LR seçme hatasını giderme,
 1.5			LR düzeltmesi,
-1.6			Hata Giderme.
+1.6			Hata Giderme,
+1.7			1.11 Desteği ve iyleştirme.
 */
 
 public Plugin myinfo = 
@@ -31,7 +32,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.6", 
+	version = "1.7", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -42,6 +43,7 @@ public void OnPluginStart()
 	g_LREndForward = new GlobalForward("LREnd", ET_Ignore, Param_Cell);
 	
 	LoadTranslations("common.phrases");
+	
 	RegConsoleCmd("sm_lr", Command_LR, "[SM] Kullanım: sm_lr");
 	
 	RegAdminCmd("sm_lriptal", Command_Cancellr, ADMFLAG_SLAY | ADMFLAG_CHAT, "[SM] Kullanım: sm_lriptal");
@@ -61,22 +63,18 @@ public void OnPluginStart()
 	HookEvent("weapon_fire", WeaponFire);
 	
 	AddCommandListener(OnJoinTeam, "jointeam");
-}
-
-public void OnAllPluginsLoaded()
-{
 	bBasecomm = LibraryExists("basecomm");
 }
 
 public void OnLibraryAdded(const char[] name)
 {
-	if (strncmp(name, "basecomm", 8, false) == 0)
+	if (strcmp(name, "basecomm", false) == 0)
 		bBasecomm = true;
 }
 
 public void OnLibraryRemoved(const char[] name)
 {
-	if (strncmp(name, "basecomm", 8, false) == 0)
+	if (strcmp(name, "basecomm", false) == 0)
 		bBasecomm = false;
 }
 
@@ -90,25 +88,17 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	return APLRes_Success;
 }
 
-public int Native_LRExist(Handle plugin, int numParams)
+public any Native_LRExist(Handle plugin, int numParams)
 {
-	if (LR)
-		return true;
-	else
-		return false;
+	return LR;
 }
 
-public int Native_LRTypeNoScope(Handle plugin, int numParams)
+public any Native_LRTypeNoScope(Handle plugin, int numParams)
 {
-	if (!LR)
-		return false;
-	else
-	{
-		if (!NsLR)
-			return false;
-		else
-			return true;
-	}
+	if (LR)
+		return NsLR;
+	
+	return false;
 }
 
 public Action Command_Cancellr(int client, int args)
@@ -135,19 +125,6 @@ public Action Command_LR(int client, int args)
 		ReplyToCommand(client, "[SM] Bu komutu ölüler kullanamaz.");
 		return Plugin_Handled;
 	}
-	int Num = 0;
-	for (int i = 1; i <= MaxClients; i++)
-	{
-		if (!IsValidClient(i) || !IsPlayerAlive(i) || GetClientTeam(i) != 2)
-			continue;
-		
-		Num++;
-	}
-	if (Num != 1)
-	{
-		ReplyToCommand(client, "[SM] Birden fazla terörist varken LR atamazsın.");
-		return Plugin_Handled;
-	}
 	
 	if (LR)
 	{
@@ -155,10 +132,28 @@ public Action Command_LR(int client, int args)
 		return Plugin_Handled;
 	}
 	
-	Num = GetClientTeam(client);
+	int Num = GetClientTeam(client);
 	if (Num != 2)
 	{
 		ReplyToCommand(client, "[SM] Sadece terörist takımı LR isteği yollayabilir.");
+		return Plugin_Handled;
+	}
+	
+	Num = 0;
+	for (int i = 1; i <= MaxClients; i++)
+	{
+		if (IsValidClient(i) && IsPlayerAlive(i) && GetClientTeam(i) == 2)
+		{
+			Num++;
+			if (Num >= 2)
+			{
+				break;
+			}
+		}
+	}
+	if (Num != 1)
+	{
+		ReplyToCommand(client, "[SM] Birden fazla terörist yaşıyorsa LR atamazsın.");
 		return Plugin_Handled;
 	}
 	
@@ -195,6 +190,7 @@ public int Menu_callback(Menu menu, MenuAction action, int client, int position)
 			Gardiyansor().Display(client, 10);
 		}
 	}
+	return 0;
 }
 
 Menu Gardiyansor()
@@ -327,14 +323,16 @@ public int Menu2_callback(Menu menu, MenuAction action, int client, int position
 			}
 		}
 	}
+	return 0;
 }
 
 public Action Beamver(Handle timer, any data)
 {
-	if (!LR || !IsValidClient(LRClient[0]) || !IsValidClient(LRClient[1]))
+	if (g_iBeam == -1 || !LR || !IsValidClient(LRClient[0]) || !IsValidClient(LRClient[1]))
 	{
 		return Plugin_Stop;
 	}
+	
 	float aPos[3];
 	if (IsValidClient(LRClient[0]))
 		GetClientAbsOrigin(LRClient[0], aPos);
@@ -367,6 +365,7 @@ public Action StartNoScope(Handle timer, int time)
 	{
 		return Plugin_Stop;
 	}
+	
 	if (!IsValidClient(LRClient[0]) || !IsPlayerAlive(LRClient[0]))
 	{
 		PrintToChatAll("[SM] Terörist bulunamadı ve LR iptal edildi.");
@@ -379,6 +378,7 @@ public Action StartNoScope(Handle timer, int time)
 		LR = false;
 		return Plugin_Stop;
 	}
+	
 	if (time <= 0)
 	{
 		SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
@@ -412,51 +412,40 @@ public Action WeaponFire(Event event, const char[] name, bool dB)
 				PrintToChatAll("[SM] Anti-Terörist bulunamadı ve LR iptal edildi.");
 				LR = false;
 			}
-			else
+			else if (client == LRClient[0] || client == LRClient[1])
 			{
-				if (client == LRClient[0] || client == LRClient[1])
+				char weapon[16];
+				event.GetString("weapon", weapon, 16);
+				if (!NsLR)
 				{
-					char weapon[16];
-					event.GetString("weapon", weapon, 16);
-					if (!NsLR)
+					if (strcmp(weapon, "weapon_deagle", false) == 0)
 					{
-						if (strncmp(weapon, "weapon_deagle", 13, false) == 0)
-						{
-							if (!S4S[client])
-							{
-								PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
-								LR = false;
-								ForcePlayerSuicide(client);
-							}
-							else
-							{
-								if (client == LRClient[0])
-								{
-									S4S[client] = false;
-									CreateTimer(0.4, ResetAmmo, client, TIMER_FLAG_NO_MAPCHANGE);
-								}
-								else if (client == LRClient[1])
-								{
-									S4S[client] = false;
-									CreateTimer(0.4, ResetAmmo, client, TIMER_FLAG_NO_MAPCHANGE);
-								}
-							}
-						}
-						else if (strncmp(weapon, "weapon_knife", 12, false) != 0)
+						if (!S4S[client])
 						{
 							PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
 							LR = false;
 							ForcePlayerSuicide(client);
+						}
+						else
+						{
+							S4S[client] = false;
+							CreateTimer(0.4, ResetAmmo, client, TIMER_FLAG_NO_MAPCHANGE);
 						}
 					}
-					else
+					else if (strcmp(weapon, "weapon_knife", false) != 0)
 					{
-						if (strncmp(weapon, "weapon_awp", 10, false) != 0)
-						{
-							PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
-							LR = false;
-							ForcePlayerSuicide(client);
-						}
+						PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
+						LR = false;
+						ForcePlayerSuicide(client);
+					}
+				}
+				else
+				{
+					if (strcmp(weapon, "weapon_awp", false) != 0)
+					{
+						PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
+						LR = false;
+						ForcePlayerSuicide(client);
 					}
 				}
 			}
@@ -467,10 +456,12 @@ public Action WeaponFire(Event event, const char[] name, bool dB)
 
 public Action OnPlayerRunCmd(int client, int &buttons)
 {
-	if (LR && NsLR && IsValidClient(client) && (client == LRClient[0] || client == LRClient[1]))
+	if (LR && NsLR && IsValidClient(client) && buttons & IN_ATTACK2 && (client == LRClient[0] || client == LRClient[1]))
 	{
 		buttons &= ~IN_ATTACK2;
+		buttons &= ~IN_ATTACK;
 	}
+	return Plugin_Continue;
 }
 
 public Action ResetAmmo(Handle timer, int client)
@@ -509,6 +500,7 @@ public Action ResetAmmo(Handle timer, int client)
 			PrintToChatAll("[SM] Atış sırası: \x10%N", LRClient[0]);
 		}
 	}
+	return Plugin_Stop;
 }
 
 public Action Command_Respawn(int client, int args)
@@ -571,8 +563,7 @@ public Action OnJoinTeam(int client, const char[] command, int argc)
 	{
 		char arg[20];
 		GetCmdArg(1, arg, 20);
-		int number = StringToInt(arg);
-		if (number != 2)
+		if (StringToInt(arg) != 2)
 		{
 			ChangeClientTeam(client, 2);
 			return Plugin_Stop;
@@ -584,7 +575,7 @@ public Action OnJoinTeam(int client, const char[] command, int argc)
 public void OnMapStart()
 {
 	char map[32];
-	GetCurrentMap(map, sizeof(map));
+	GetCurrentMap(map, 32);
 	char Filename[256];
 	GetPluginFilename(INVALID_HANDLE, Filename, 256);
 	if (strncmp(map, "workshop/", 9, false) == 0)
@@ -601,23 +592,24 @@ public void OnMapStart()
 	SetConVarInt(FindConVar("mp_equipment_reset_rounds"), 1, true, false);
 }
 
-public void OnClientPostAdminCheck(int client)
+public void OnClientPutInServer(int client)
 {
-	CreateTimer(0.5, TaT, client, TIMER_FLAG_NO_MAPCHANGE);
+	CreateTimer(0.5, TaT, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 	SetClientListeningFlags(client, VOICE_MUTED);
 	if (bBasecomm)
 		BaseComm_SetClientMute(client, true);
 }
 
-public Action TaT(Handle timer, int client)
+public Action TaT(Handle timer, int userid)
 {
+	int client = GetClientOfUserId(userid);
 	if (client <= 0 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client))
 	{
 		return Plugin_Stop;
 	}
 	else if (!IsClientConnected(client))
 	{
-		CreateTimer(1.0, TaT, client, TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(0.5, TaT, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 		return Plugin_Stop;
 	}
 	else
@@ -626,6 +618,7 @@ public Action TaT(Handle timer, int client)
 		SetClientListeningFlags(client, VOICE_MUTED);
 		if (bBasecomm)
 			BaseComm_SetClientMute(client, true);
+		
 		return Plugin_Stop;
 	}
 }
@@ -633,7 +626,7 @@ public Action TaT(Handle timer, int client)
 public Action OnClientSpawn(Event event, const char[] name, bool dB)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
-	if (IsValidClient(client) && IsPlayerAlive(client))
+	if (IsValidClient(client))
 	{
 		int wepIdx;
 		for (int i; i < 13; i++)
@@ -644,16 +637,19 @@ public Action OnClientSpawn(Event event, const char[] name, bool dB)
 				RemoveEntity(wepIdx);
 			}
 		}
+		
 		GivePlayerItem(client, "weapon_knife");
 		if (GetClientTeam(client) == 3)
 		{
 			GivePlayerItem(client, "weapon_m4a1");
 			GivePlayerItem(client, "weapon_deagle");
 		}
+		
 		SetEntProp(client, Prop_Data, "m_CollisionGroup", 2);
 		SetEntityRenderColor(client, 255, 255, 255, 255);
 		SetEntityRenderMode(client, RENDER_NORMAL);
 	}
+	return Plugin_Continue;
 }
 
 public Action OnClientDead(Event event, const char[] name, bool dB)
@@ -675,6 +671,7 @@ public Action OnClientDead(Event event, const char[] name, bool dB)
 			}
 		}
 	}
+	return Plugin_Continue;
 }
 
 public Action RoundStart(Event event, const char[] name, bool dB)
@@ -690,6 +687,7 @@ public Action RoundStart(Event event, const char[] name, bool dB)
 				RemoveEntity(i);
 		}
 	}
+	return Plugin_Continue;
 }
 
 public Action RoundEnd(Event event, const char[] name, bool dB)
@@ -706,6 +704,7 @@ public Action RoundEnd(Event event, const char[] name, bool dB)
 		}
 	}
 	LR = false;
+	return Plugin_Continue;
 }
 
 bool IsValidClient(int client, bool nobots = true)
