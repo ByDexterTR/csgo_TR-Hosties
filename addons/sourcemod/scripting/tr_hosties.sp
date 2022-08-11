@@ -13,6 +13,7 @@ int LRClient[2] = { 0, ... }; // 0 T | 1 CT
 bool S4S[65] = { false, ... };
 GlobalForward g_LRForward, g_LRCancelForward, g_LREndForward;
 bool bBasecomm;
+int g_WeaponParent = -1;
 
 /* Güncellemeler
 1.0			İlk paylaşım,
@@ -24,7 +25,8 @@ bool bBasecomm;
 1.4bFix		Ölülerin LR seçme hatasını giderme,
 1.5			LR düzeltmesi,
 1.6			Hata Giderme,
-1.7			1.11 Desteği ve iyleştirme.
+1.7			1.11 Desteği ve iyleştirme,
+1.8			İyileştirmeler ve LR bıçak hatasını giderme.
 */
 
 public Plugin myinfo = 
@@ -32,12 +34,14 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.7", 
+	version = "1.8", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
 public void OnPluginStart()
 {
+	g_WeaponParent = FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity");
+	
 	g_LRForward = new GlobalForward("LRStart", ET_Ignore, Param_Cell, Param_Cell);
 	g_LRCancelForward = new GlobalForward("LRCancel", ET_Ignore, Param_Cell, Param_Cell);
 	g_LREndForward = new GlobalForward("LREnd", ET_Ignore, Param_Cell);
@@ -68,13 +72,13 @@ public void OnPluginStart()
 
 public void OnLibraryAdded(const char[] name)
 {
-	if (strcmp(name, "basecomm", false) == 0)
+	if (strcmp(name, "basecomm") == 0)
 		bBasecomm = true;
 }
 
 public void OnLibraryRemoved(const char[] name)
 {
-	if (strcmp(name, "basecomm", false) == 0)
+	if (strcmp(name, "basecomm") == 0)
 		bBasecomm = false;
 }
 
@@ -170,24 +174,30 @@ public Action Command_LR(int client, int args)
 
 public int Menu_callback(Menu menu, MenuAction action, int client, int position)
 {
-	if (action == MenuAction_End)
+	switch (action)
 	{
-		delete menu;
-	}
-	else if (action == MenuAction_Select)
-	{
-		char item[4];
-		menu.GetItem(position, item, 4);
-		int pos = StringToInt(item);
-		if (pos == 0)
+		case MenuAction_End:
 		{
-			NsLR = false;
-			Gardiyansor().Display(client, 10);
+			delete menu;
 		}
-		else if (pos == 1)
+		case MenuAction_Select:
 		{
-			NsLR = true;
-			Gardiyansor().Display(client, 10);
+			char item[4];
+			menu.GetItem(position, item, 4);
+			int pos = StringToInt(item);
+			switch (pos)
+			{
+				case 0:
+				{
+					NsLR = false;
+					Gardiyansor().Display(client, 10);
+				}
+				case 1:
+				{
+					NsLR = true;
+					Gardiyansor().Display(client, 10);
+				}
+			}
 		}
 	}
 	return 0;
@@ -216,110 +226,113 @@ Menu Gardiyansor()
 
 public int Menu2_callback(Menu menu, MenuAction action, int client, int position)
 {
-	if (action == MenuAction_End)
+	switch (action)
 	{
-		delete menu;
-	}
-	else if (action == MenuAction_Select)
-	{
-		char item[16];
-		menu.GetItem(position, item, 16);
-		int pos = StringToInt(item);
-		if (pos == 0)
+		case MenuAction_End:
 		{
-			Gardiyansor().Display(client, 10);
+			delete menu;
 		}
-		else
+		case MenuAction_Select:
 		{
-			LRClient[0] = client;
-			LRClient[1] = GetClientOfUserId(pos);
-			if (IsValidClient(LRClient[1]))
+			char item[16];
+			menu.GetItem(position, item, 16);
+			int pos = StringToInt(item);
+			if (pos == 0)
 			{
-				if (!IsPlayerAlive(LRClient[1]))
-					CS_RespawnPlayer(LRClient[1]);
-				
-				SetEntProp(LRClient[1], Prop_Send, "m_bHasHelmet", 0);
-				SetEntProp(LRClient[1], Prop_Send, "m_ArmorValue", 0, 0);
-				SetEntProp(LRClient[1], Prop_Send, "m_bHasHeavyArmor", 0);
-				SetEntProp(LRClient[1], Prop_Send, "m_bWearingSuit", 0);
-				SetEntityHealth(LRClient[1], 100);
-				SetEntPropFloat(LRClient[1], Prop_Data, "m_flLaggedMovementValue", 1.0);
-				int wepIdx = 0;
-				for (int i; i < 12; i++)
-				{
-					while ((wepIdx = GetPlayerWeaponSlot(LRClient[1], i)) != -1)
-					{
-						RemovePlayerItem(LRClient[1], wepIdx);
-						RemoveEntity(wepIdx);
-					}
-				}
-				
-				SetEntProp(LRClient[0], Prop_Send, "m_bHasHelmet", 0);
-				SetEntProp(LRClient[0], Prop_Send, "m_ArmorValue", 0, 0);
-				SetEntProp(LRClient[0], Prop_Send, "m_bHasHeavyArmor", 0);
-				SetEntProp(LRClient[0], Prop_Send, "m_bWearingSuit", 0);
-				SetEntityHealth(LRClient[0], 100);
-				SetEntPropFloat(LRClient[0], Prop_Data, "m_flLaggedMovementValue", 1.0);
-				wepIdx = 0;
-				for (int i; i < 12; i++)
-				{
-					while ((wepIdx = GetPlayerWeaponSlot(LRClient[0], i)) != -1)
-					{
-						RemovePlayerItem(LRClient[0], wepIdx);
-						RemoveEntity(wepIdx);
-					}
-				}
-				
-				SetEntityModel(LRClient[0], "models/player/custom_player/legacy/tm_jungle_raider_variantc.mdl");
-				SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
-				SetEntityModel(LRClient[1], "models/player/custom_player/legacy/ctm_st6_variantk.mdl");
-				SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 2, 1);
-				
-				LR = true;
-				if (NsLR)
-				{
-					PrintToChatAll("[SM] \x10%N \x01ve \x10%N\x01, NoScope(\x06Awp\x01) kapışmasına \x0Fbaşladı.", LRClient[0], LRClient[1]);
-					int iAwp = GivePlayerItem(LRClient[0], "weapon_awp");
-					SetEntProp(iAwp, Prop_Data, "m_iClip1", 313);
-					SetEntProp(iAwp, Prop_Send, "m_iPrimaryReserveAmmoCount", 313);
-					SetEntProp(iAwp, Prop_Send, "m_iSecondaryReserveAmmoCount", 313);
-					iAwp = GivePlayerItem(LRClient[1], "weapon_awp");
-					SetEntProp(iAwp, Prop_Data, "m_iClip1", 313);
-					SetEntProp(iAwp, Prop_Send, "m_iPrimaryReserveAmmoCount", 313);
-					SetEntProp(iAwp, Prop_Send, "m_iSecondaryReserveAmmoCount", 313);
-					CreateTimer(1.0, StartNoScope, 4, TIMER_FLAG_NO_MAPCHANGE);
-					SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 0, 1);
-					SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 0, 1);
-				}
-				else
-				{
-					PrintToChatAll("[SM] \x10%N \x01ve \x10%N\x01, Shot4Shot(\x06Deagle\x01) kapışmasına \x0Fbaşladı.", LRClient[0], LRClient[1]);
-					int iDeagle = GivePlayerItem(LRClient[0], "weapon_deagle");
-					GivePlayerItem(LRClient[0], "weapon_knife");
-					SetEntProp(iDeagle, Prop_Data, "m_iClip1", 1);
-					SetEntProp(iDeagle, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
-					SetEntProp(iDeagle, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
-					PrintToChatAll("[SM] Atış sırası: \x10%N", LRClient[0]);
-					S4S[LRClient[0]] = true;
-					S4S[LRClient[1]] = false;
-					iDeagle = GivePlayerItem(LRClient[1], "weapon_deagle");
-					GivePlayerItem(LRClient[1], "weapon_knife");
-					SetEntProp(iDeagle, Prop_Data, "m_iClip1", 0);
-					SetEntProp(iDeagle, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
-					SetEntProp(iDeagle, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
-					SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 2, 1);
-					SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
-				}
-				CreateTimer(0.1, Beamver, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-				Call_StartForward(g_LRForward);
-				Call_PushCell(LRClient[0]);
-				Call_PushCell(LRClient[1]);
-				Call_Finish();
+				Gardiyansor().Display(client, 10);
 			}
 			else
 			{
-				PrintToChat(client, "[SM] \x07Ufak bir karışıklık oldu. \x10Kapışmak istediğiniz kişiyi tekrar seçin.");
-				Gardiyansor().Display(client, 10);
+				LRClient[0] = client;
+				LRClient[1] = GetClientOfUserId(pos);
+				if (IsValidClient(LRClient[1]))
+				{
+					if (!IsPlayerAlive(LRClient[1]))
+						CS_RespawnPlayer(LRClient[1]);
+					
+					SetEntProp(LRClient[1], Prop_Send, "m_bHasHelmet", 0);
+					SetEntProp(LRClient[1], Prop_Send, "m_ArmorValue", 0, 0);
+					SetEntProp(LRClient[1], Prop_Send, "m_bHasHeavyArmor", 0);
+					SetEntProp(LRClient[1], Prop_Send, "m_bWearingSuit", 0);
+					SetEntityHealth(LRClient[1], 100);
+					SetEntPropFloat(LRClient[1], Prop_Data, "m_flLaggedMovementValue", 1.0);
+					int wepIdx = 0;
+					for (int i; i < 12; i++)
+					{
+						while ((wepIdx = GetPlayerWeaponSlot(LRClient[1], i)) != -1)
+						{
+							RemovePlayerItem(LRClient[1], wepIdx);
+							RemoveEntity(wepIdx);
+						}
+					}
+					
+					SetEntProp(LRClient[0], Prop_Send, "m_bHasHelmet", 0);
+					SetEntProp(LRClient[0], Prop_Send, "m_ArmorValue", 0, 0);
+					SetEntProp(LRClient[0], Prop_Send, "m_bHasHeavyArmor", 0);
+					SetEntProp(LRClient[0], Prop_Send, "m_bWearingSuit", 0);
+					SetEntityHealth(LRClient[0], 100);
+					SetEntPropFloat(LRClient[0], Prop_Data, "m_flLaggedMovementValue", 1.0);
+					wepIdx = 0;
+					for (int i; i < 12; i++)
+					{
+						while ((wepIdx = GetPlayerWeaponSlot(LRClient[0], i)) != -1)
+						{
+							RemovePlayerItem(LRClient[0], wepIdx);
+							RemoveEntity(wepIdx);
+						}
+					}
+					
+					SetEntityModel(LRClient[0], "models/player/custom_player/legacy/tm_jungle_raider_variantc.mdl");
+					SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
+					SetEntityModel(LRClient[1], "models/player/custom_player/legacy/ctm_st6_variantk.mdl");
+					SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 2, 1);
+					
+					LR = true;
+					if (NsLR)
+					{
+						PrintToChatAll("[SM] \x10%N \x01ve \x10%N\x01, NoScope(\x06Awp\x01) kapışmasına \x0Fbaşladı.", LRClient[0], LRClient[1]);
+						int iAwp = GivePlayerItem(LRClient[0], "weapon_awp");
+						SetEntProp(iAwp, Prop_Data, "m_iClip1", 313);
+						SetEntProp(iAwp, Prop_Send, "m_iPrimaryReserveAmmoCount", 313);
+						SetEntProp(iAwp, Prop_Send, "m_iSecondaryReserveAmmoCount", 313);
+						iAwp = GivePlayerItem(LRClient[1], "weapon_awp");
+						SetEntProp(iAwp, Prop_Data, "m_iClip1", 313);
+						SetEntProp(iAwp, Prop_Send, "m_iPrimaryReserveAmmoCount", 313);
+						SetEntProp(iAwp, Prop_Send, "m_iSecondaryReserveAmmoCount", 313);
+						CreateTimer(1.0, StartNoScope, 4, TIMER_FLAG_NO_MAPCHANGE);
+						SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 0, 1);
+						SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 0, 1);
+					}
+					else
+					{
+						PrintToChatAll("[SM] \x10%N \x01ve \x10%N\x01, Shot4Shot(\x06Deagle\x01) kapışmasına \x0Fbaşladı.", LRClient[0], LRClient[1]);
+						int iDeagle = GivePlayerItem(LRClient[0], "weapon_deagle");
+						GivePlayerItem(LRClient[0], "weapon_knife");
+						SetEntProp(iDeagle, Prop_Data, "m_iClip1", 1);
+						SetEntProp(iDeagle, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
+						SetEntProp(iDeagle, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
+						PrintToChatAll("[SM] Atış sırası: \x10%N", LRClient[0]);
+						S4S[LRClient[0]] = true;
+						S4S[LRClient[1]] = false;
+						iDeagle = GivePlayerItem(LRClient[1], "weapon_deagle");
+						GivePlayerItem(LRClient[1], "weapon_knife");
+						SetEntProp(iDeagle, Prop_Data, "m_iClip1", 0);
+						SetEntProp(iDeagle, Prop_Send, "m_iPrimaryReserveAmmoCount", 0);
+						SetEntProp(iDeagle, Prop_Send, "m_iSecondaryReserveAmmoCount", 0);
+						SetEntProp(LRClient[1], Prop_Data, "m_takedamage", 2, 1);
+						SetEntProp(LRClient[0], Prop_Data, "m_takedamage", 2, 1);
+					}
+					CreateTimer(0.1, Beamver, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
+					Call_StartForward(g_LRForward);
+					Call_PushCell(LRClient[0]);
+					Call_PushCell(LRClient[1]);
+					Call_Finish();
+				}
+				else
+				{
+					PrintToChat(client, "[SM] \x07Ufak bir karışıklık oldu. \x10Kapışmak istediğiniz kişiyi tekrar seçin.");
+					Gardiyansor().Display(client, 10);
+				}
 			}
 		}
 	}
@@ -432,7 +445,7 @@ public Action WeaponFire(Event event, const char[] name, bool dB)
 							CreateTimer(0.4, ResetAmmo, client, TIMER_FLAG_NO_MAPCHANGE);
 						}
 					}
-					else if (strcmp(weapon, "weapon_knife", false) != 0)
+					else if (strncmp(weapon, "weapon_knife", 12, false) != 0)
 					{
 						PrintToChatAll("[SM] \x10%N\x01 hile yaptığı için öldürüldü.", client);
 						LR = false;
@@ -592,7 +605,7 @@ public void OnMapStart()
 	SetConVarInt(FindConVar("mp_equipment_reset_rounds"), 1, true, false);
 }
 
-public void OnClientPutInServer(int client)
+public void OnClientConnected(int client)
 {
 	CreateTimer(0.5, TaT, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 	SetClientListeningFlags(client, VOICE_MUTED);
@@ -614,6 +627,15 @@ public Action TaT(Handle timer, int userid)
 	}
 	else
 	{
+		int wepIdx;
+		for (int i; i < 13; i++)
+		{
+			while ((wepIdx = GetPlayerWeaponSlot(client, i)) != -1)
+			{
+				RemovePlayerItem(client, wepIdx);
+				RemoveEntity(wepIdx);
+			}
+		}
 		ChangeClientTeam(client, 2);
 		SetClientListeningFlags(client, VOICE_MUTED);
 		if (bBasecomm)
@@ -626,7 +648,7 @@ public Action TaT(Handle timer, int userid)
 public Action OnClientSpawn(Event event, const char[] name, bool dB)
 {
 	int client = GetClientOfUserId(event.GetInt("userid"));
-	if (IsValidClient(client))
+	if (IsClientInGame(client))
 	{
 		int wepIdx;
 		for (int i; i < 13; i++)
@@ -676,15 +698,18 @@ public Action OnClientDead(Event event, const char[] name, bool dB)
 
 public Action RoundStart(Event event, const char[] name, bool dB)
 {
-	int g_WeaponParent = FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity");
-	char weapon[14];
-	for (int i = MaxClients; i < GetMaxEntities(); i++)
+	if (g_WeaponParent != -1)
 	{
-		if (IsValidEntity(i))
+		char weapon[14];
+		int maxent = GetMaxEntities();
+		for (int i = MaxClients; i <= maxent; i++)
 		{
-			GetEntityClassname(i, weapon, 14);
-			if (strncmp(weapon, "weapon_knife", 12, false) == 0 && GetEntDataEnt2(i, g_WeaponParent) == -1)
-				RemoveEntity(i);
+			if (IsValidEntity(i))
+			{
+				GetEntityClassname(i, weapon, 14);
+				if (strncmp(weapon, "weapon_knife", 12, false) == 0 && GetEntDataEnt2(i, g_WeaponParent) == -1)
+					RemoveEntity(i);
+			}
 		}
 	}
 	return Plugin_Continue;
@@ -692,18 +717,21 @@ public Action RoundStart(Event event, const char[] name, bool dB)
 
 public Action RoundEnd(Event event, const char[] name, bool dB)
 {
-	int g_WeaponParent = FindSendPropInfo("CBaseCombatWeapon", "m_hOwnerEntity");
-	char weapon[9];
-	for (int i = MaxClients; i < GetMaxEntities(); i++)
+	if (g_WeaponParent != -1)
 	{
-		if (IsValidEntity(i))
+		char weapon[9];
+		int maxent = GetMaxEntities();
+		for (int i = MaxClients; i <= maxent; i++)
 		{
-			GetEntityClassname(i, weapon, 9);
-			if ((strncmp(weapon, "weapon_", 7, false) == 0 || strncmp(weapon, "item_", 5) == 0) && GetEntDataEnt2(i, g_WeaponParent) == -1)
-				RemoveEntity(i);
+			if (IsValidEntity(i))
+			{
+				GetEntityClassname(i, weapon, 9);
+				if ((strncmp(weapon, "weapon_", 7, false) == 0 || strncmp(weapon, "item_", 5) == 0) && GetEntDataEnt2(i, g_WeaponParent) == -1)
+					RemoveEntity(i);
+			}
 		}
+		LR = false;
 	}
-	LR = false;
 	return Plugin_Continue;
 }
 
