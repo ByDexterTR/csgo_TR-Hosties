@@ -26,7 +26,8 @@ int g_WeaponParent = -1;
 1.6			Hata Giderme,
 1.7			1.11 Desteği ve iyleştirme,
 1.8			İyileştirmeler ve LR bıçak hatasını giderme,
-1.9			Hata giderme.
+1.9			Hata giderme,
+1.9b			Yazım hatası giderme.
 */
 
 public Plugin myinfo = 
@@ -34,7 +35,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.9", 
+	version = "1.9b", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -662,7 +663,7 @@ public Action OnClientDead(Event event, const char[] name, bool dB)
 		int ent = GetEntPropEnt(client, Prop_Send, "m_hRagdoll");
 		if (IsValidEntity(ent))
 		{
-			GetEntPropVector(GetEntPropEnt(client, Prop_Send, "m_hRagdoll"), Prop_Send, "m_vecOrigin", dcoor[client]);
+			GetEntPropVector(ent, Prop_Send, "m_vecOrigin", dcoor[client]);
 		}
 		else
 		{
