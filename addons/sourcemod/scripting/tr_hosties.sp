@@ -11,8 +11,7 @@ bool LR = false, NsLR = false;
 int g_iBeam = -1;
 int LRClient[2] = { 0, ... }; // 0 T | 1 CT
 bool S4S[65] = { false, ... };
-GlobalForward g_LRForward, g_LRCancelForward, g_LREndForward;
-bool bBasecomm;
+GlobalForward g_LRForward = null, g_LRCancelForward = null, g_LREndForward = null;
 int g_WeaponParent = -1;
 
 /* Güncellemeler
@@ -26,7 +25,8 @@ int g_WeaponParent = -1;
 1.5			LR düzeltmesi,
 1.6			Hata Giderme,
 1.7			1.11 Desteği ve iyleştirme,
-1.8			İyileştirmeler ve LR bıçak hatasını giderme.
+1.8			İyileştirmeler ve LR bıçak hatasını giderme,
+1.9			Hata giderme.
 */
 
 public Plugin myinfo = 
@@ -34,7 +34,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.8", 
+	version = "1.9", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -67,19 +67,6 @@ public void OnPluginStart()
 	HookEvent("weapon_fire", WeaponFire);
 	
 	AddCommandListener(OnJoinTeam, "jointeam");
-	bBasecomm = LibraryExists("basecomm");
-}
-
-public void OnLibraryAdded(const char[] name)
-{
-	if (strcmp(name, "basecomm") == 0)
-		bBasecomm = true;
-}
-
-public void OnLibraryRemoved(const char[] name)
-{
-	if (strcmp(name, "basecomm") == 0)
-		bBasecomm = false;
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -602,47 +589,40 @@ public void OnMapStart()
 	g_iBeam = PrecacheModel("materials/sprites/white.vmt", true);
 	PrecacheModel("models/player/custom_player/legacy/tm_jungle_raider_variantc.mdl");
 	PrecacheModel("models/player/custom_player/legacy/ctm_st6_variantk.mdl");
-	SetConVarInt(FindConVar("mp_equipment_reset_rounds"), 1, true, false);
+	SetConVarInt(FindConVar("mp_equipment_reset_rounds"), 1);
+	SetConVarString(FindConVar("mp_ct_default_primary"), " ");
+	SetConVarString(FindConVar("mp_t_default_primary"), " ");
+	SetConVarString(FindConVar("mp_ct_default_secondary"), " ");
+	SetConVarString(FindConVar("mp_t_default_secondary"), " ");
+	SetConVarString(FindConVar("mp_ct_default_melee"), " ");
+	SetConVarString(FindConVar("mp_t_default_melee"), " ");
 }
 
-public void OnClientConnected(int client)
+public void OnClientPutInServer(int client)
 {
 	CreateTimer(0.5, TaT, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
-	SetClientListeningFlags(client, VOICE_MUTED);
-	if (bBasecomm)
+	if (IsClientInGame(client))
 		BaseComm_SetClientMute(client, true);
 }
 
 public Action TaT(Handle timer, int userid)
 {
 	int client = GetClientOfUserId(userid);
-	if (client <= 0 || client > MaxClients || !IsClientInGame(client) || IsFakeClient(client))
+	if (!IsClientInGame(client))
 	{
 		return Plugin_Stop;
 	}
-	else if (!IsClientConnected(client))
+	
+	if (!IsClientConnected(client))
 	{
-		CreateTimer(0.5, TaT, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+		CreateTimer(0.5, TaT, userid, TIMER_FLAG_NO_MAPCHANGE);
 		return Plugin_Stop;
 	}
-	else
-	{
-		int wepIdx;
-		for (int i; i < 13; i++)
-		{
-			while ((wepIdx = GetPlayerWeaponSlot(client, i)) != -1)
-			{
-				RemovePlayerItem(client, wepIdx);
-				RemoveEntity(wepIdx);
-			}
-		}
-		ChangeClientTeam(client, 2);
-		SetClientListeningFlags(client, VOICE_MUTED);
-		if (bBasecomm)
-			BaseComm_SetClientMute(client, true);
-		
-		return Plugin_Stop;
-	}
+	
+	ChangeClientTeam(client, 2);
+	BaseComm_SetClientMute(client, true);
+	
+	return Plugin_Stop;
 }
 
 public Action OnClientSpawn(Event event, const char[] name, bool dB)
@@ -679,7 +659,16 @@ public Action OnClientDead(Event event, const char[] name, bool dB)
 	int client = GetClientOfUserId(event.GetInt("userid"));
 	if (IsValidClient(client))
 	{
-		GetEntPropVector(GetEntPropEnt(client, Prop_Send, "m_hRagdoll"), Prop_Send, "m_vecOrigin", dcoor[client]);
+		int ent = GetEntPropEnt(client, Prop_Send, "m_hRagdoll");
+		if (IsValidEntity(ent))
+		{
+			GetEntPropVector(GetEntPropEnt(client, Prop_Send, "m_hRagdoll"), Prop_Send, "m_vecOrigin", dcoor[client]);
+		}
+		else
+		{
+			GetClientAbsOrigin(client, dcoor[client]);
+		}
+		
 		GetClientAbsAngles(client, dangle[client]);
 		if (LR)
 		{
@@ -700,13 +689,13 @@ public Action RoundStart(Event event, const char[] name, bool dB)
 {
 	if (g_WeaponParent != -1)
 	{
-		char weapon[14];
+		char weapon[13];
 		int maxent = GetMaxEntities();
 		for (int i = MaxClients; i <= maxent; i++)
 		{
 			if (IsValidEntity(i))
 			{
-				GetEntityClassname(i, weapon, 14);
+				GetEntityClassname(i, weapon, 13);
 				if (strncmp(weapon, "weapon_knife", 12, false) == 0 && GetEntDataEnt2(i, g_WeaponParent) == -1)
 					RemoveEntity(i);
 			}
@@ -719,13 +708,13 @@ public Action RoundEnd(Event event, const char[] name, bool dB)
 {
 	if (g_WeaponParent != -1)
 	{
-		char weapon[9];
+		char weapon[8];
 		int maxent = GetMaxEntities();
 		for (int i = MaxClients; i <= maxent; i++)
 		{
 			if (IsValidEntity(i))
 			{
-				GetEntityClassname(i, weapon, 9);
+				GetEntityClassname(i, weapon, 8);
 				if ((strncmp(weapon, "weapon_", 7, false) == 0 || strncmp(weapon, "item_", 5) == 0) && GetEntDataEnt2(i, g_WeaponParent) == -1)
 					RemoveEntity(i);
 			}
