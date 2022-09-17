@@ -27,7 +27,8 @@ int g_WeaponParent = -1;
 1.7			1.11 Desteği ve iyleştirme,
 1.8			İyileştirmeler ve LR bıçak hatasını giderme,
 1.9			Hata giderme,
-1.9b			Yazım hatası giderme.
+1.9b		Yazım hatası giderme,
+1.9c		Ufak hata gidermesi.
 */
 
 public Plugin myinfo = 
@@ -35,7 +36,7 @@ public Plugin myinfo =
 	name = "[JB] TR Hosties", 
 	author = "ByDexter", 
 	description = "Türkiye için uyarlanmış jailbreak ana eklentisi.", 
-	version = "1.9b", 
+	version = "1.9c", 
 	url = "https://steamcommunity.com/id/ByDexterTR - ByDexter#5494"
 };
 
@@ -609,7 +610,7 @@ public void OnClientPutInServer(int client)
 public Action TaT(Handle timer, int userid)
 {
 	int client = GetClientOfUserId(userid);
-	if (!IsClientInGame(client))
+	if (client <= 0 || client > MaxClients || !IsClientInGame(client))
 	{
 		return Plugin_Stop;
 	}
